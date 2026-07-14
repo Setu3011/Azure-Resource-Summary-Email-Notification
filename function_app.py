@@ -727,7 +727,6 @@ def send_summary_email(report):
 
     return result
 
-
 @app.timer_trigger(
     # schedule="0 0 */2 * * *", # Triggers every 2 hours 
     schedule="0 * * * * *", # Triggers every minute for testing
@@ -764,7 +763,7 @@ def resource_summary(myTimer: func.TimerRequest) -> None:
             "Total Cost : %s",
             format_cost(report["total_cost"])
         )
-
+        
         send_summary_email(report)
 
         logging.info("Execution completed successfully.")
