@@ -12,15 +12,15 @@ from azure.mgmt.resource import ResourceManagementClient
 from azure.communication.email import EmailClient
 
 
-###############################################################################
+#-------------------------------
 # Function App
-###############################################################################
+#--------------------------------
 
 app = func.FunctionApp()
 
-###############################################################################
+#------------------------------
 # Environment Variables
-###############################################################################
+#------------------------------
 
 SUBSCRIPTION_ID = os.getenv("AZURE_SUBSCRIPTION_ID")
 RESOURCE_GROUP_NAME = os.getenv("RESOURCE_GROUP_NAME")
@@ -32,24 +32,41 @@ COMMUNICATION_SERVICES_CONNECTION_STRING = os.getenv(
 SENDER_EMAIL = os.getenv("SENDER_EMAIL")
 RECIPIENT_EMAIL = os.getenv("RECIPIENT_EMAIL")
 
-###############################################################################
+# --------------------------------
 # Authentication
-###############################################################################
+# --------------------------------
 
 credential = DefaultAzureCredential()
 
-resource_client = ResourceManagementClient(
-    credential,
-    SUBSCRIPTION_ID
-)
+resource_client = None
+email_client = None
 
-email_client = EmailClient.from_connection_string(
-    COMMUNICATION_SERVICES_CONNECTION_STRING
-)
 
-###############################################################################
+def get_resource_client():
+    global resource_client
+
+    if resource_client is None:
+        resource_client = ResourceManagementClient(
+            credential,
+            SUBSCRIPTION_ID
+        )
+
+    return resource_client
+
+
+def get_email_client():
+    global email_client
+
+    if email_client is None:
+        email_client = EmailClient.from_connection_string(
+            COMMUNICATION_SERVICES_CONNECTION_STRING
+        )
+
+    return email_client
+
+# --------------------------------
 # Azure Resource Type Mapping
-###############################################################################
+# --------------------------------
 
 SERVICE_MAPPING = {
 
@@ -139,9 +156,9 @@ SERVICE_MAPPING = {
 
 }
 
-###############################################################################
+# --------------------------------
 # Validate Configuration
-###############################################################################
+# --------------------------------
 
 def validate_environment():
 
@@ -168,9 +185,9 @@ def validate_environment():
             + "\n".join(missing)
         )
 
-###############################################################################
+# --------------------------------
 # Get Azure Access Token
-###############################################################################
+# --------------------------------
 
 def get_access_token():
 
@@ -180,9 +197,9 @@ def get_access_token():
 
     return token.token
 
-###############################################################################
+# --------------------------------
 # Get All Resources
-###############################################################################
+# --------------------------------
 
 def get_all_resources():
 
@@ -192,7 +209,7 @@ def get_all_resources():
 
     resources = []
 
-    result = resource_client.resources.list_by_resource_group(
+    result = get_resource_client().resources.list_by_resource_group(
         RESOURCE_GROUP_NAME
     )
 
@@ -224,9 +241,9 @@ def get_all_resources():
 
     return resources
 
-###############################################################################
+# --------------------------------
 # Group Resources by Service
-###############################################################################
+# --------------------------------
 
 def group_resources(resources):
 
@@ -240,17 +257,15 @@ def group_resources(resources):
 
     return grouped
 
+# -------------------------
 # Format Currency
-###############################################################################
-
-# def format_cost(cost):
-#     return "${:,.2f}".format(cost) # (Cost in USD)
-
+# -------------------------
 def format_cost(cost):
     return f"₹{cost:,.2f} INR"     # (Cost in INR)
 
+# --------------------------------
 # Logging Helper
-###############################################################################
+# ----------------------------------
 
 def log_resource_summary(resources):
 
@@ -271,82 +286,9 @@ def log_resource_summary(resources):
     logging.info(
         "========================================"
     )
-
-# Cost Management (API version 2023-11-01)
-
-...
-def log_resource_summary(resources):
-    ...
-
-#######################################################
-# NEW FUNCTION HERE
-#######################################################
-
-# def get_resource_group_total_cost():
-
-#     token = get_access_token()
-
-#     url = (
-#         f"https://management.azure.com/subscriptions/{SUBSCRIPTION_ID}"
-#         "/providers/Microsoft.CostManagement/query"
-#         "?api-version=2023-11-01"
-#     )
-
-#     headers = {
-#         "Authorization": f"Bearer {token}",
-#         "Content-Type": "application/json"
-#     }
-
-#     body = {
-#         "type": "ActualCost",
-#         "timeframe": "Custom",
-#         "timePeriod": {
-#             "from": "2026-07-01T00:00:00+00:00",
-#             "to": "2026-07-31T23:59:59+00:00"
-#         },
-#         "dataset": {
-#             "granularity": "None",
-#             "aggregation": {
-#                 "totalCost": {
-#                     "name": "Cost",
-#                     "function": "Sum"
-#                 }
-#             },
-
-#     logging.info("Resource Group = %s", RESOURCE_GROUP_NAME)
-
-#             "filter": {
-#                 "dimensions": {
-#                     "name": "ResourceGroupName",
-#                     "operator": "In",
-#                     "values": [
-#                         RESOURCE_GROUP_NAME
-#                     ]
-#                 }
-#             }
-#         }
-#     }
-
-#     response = requests.post(
-#         url,
-#         headers=headers,
-#         json=body,
-#         timeout=120
-#     )
-
-#     response.raise_for_status()
-
-#     result = response.json()
-
-#     rows = result["properties"]["rows"]
-
-#     if not rows:
-#         return 0.0
-
-#     return round(float(rows[0][0]), 2)
-
-# EXISTING FUNCTION
-#######################################################
+# -------------------------------------------------
+#       FUNCTION
+# ------------------------------------------------
 
 
 def get_cost_by_resource():
@@ -439,12 +381,6 @@ def get_cost_by_resource():
     if "ResourceId" not in column_index:
         raise Exception("ResourceId column missing.")
 
-    # if "Cost" not in column_index:
-    #     raise Exception("Cost column missing.")
-
-    # resource_idx = column_index["ResourceId"]
-    # cost_idx = column_index["Cost"]
-
     resource_idx = column_index["ResourceId"]
 
     if "Cost" in column_index:
@@ -469,8 +405,6 @@ def get_cost_by_resource():
         except Exception:
             cost = 0.0
 
-        # cost_lookup[resource_id] = round(cost, 2)
-
         cost_lookup[resource_id] = round(
             cost_lookup.get(resource_id, 0.0) + cost,
             2
@@ -482,7 +416,6 @@ def get_cost_by_resource():
     )
 
     return cost_lookup
-
 
 def merge_resources_with_cost(resources, cost_lookup):
     """
@@ -567,8 +500,6 @@ def collect_resource_report():
         resources,
         cost_lookup
     )
-
-    total_cost = get_resource_group_total_cost()    
   
     log_resource_summary(resources)
  
@@ -577,7 +508,6 @@ def collect_resource_report():
     report = build_summary(resources)
 
     report["resources"] = resources
-    report["total_cost"] = total_cost
 
     return report
 
@@ -789,7 +719,7 @@ def send_summary_email(report):
 
     logging.info("Sending email to %s", RECIPIENT_EMAIL)
 
-    poller = email_client.begin_send(message)
+    poller = get_email_client().begin_send(message)
 
     result = poller.result()
 
@@ -801,7 +731,7 @@ def send_summary_email(report):
 
 @app.timer_trigger(
     # schedule="0 0 */2 * * *", # Triggers every 2 hours 
-    schedule="* * * * * ", # Triggers every minute for testing
+    schedule="0 * * * * *", # Triggers every minute for testing
   # schedule="*/2 * * * *", # Triggers every 2 minutes for testing
     arg_name="myTimer",
     run_on_startup=False,
